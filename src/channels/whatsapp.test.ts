@@ -96,6 +96,31 @@ vi.mock('@whiskeysockets/baileys', () => {
   };
 });
 
+// Mock media processing to avoid real download attempts in tests
+vi.mock('../media-processing.js', () => ({
+  isImageMessage: vi.fn((msg: { message?: { imageMessage?: unknown } }) => msg.message?.imageMessage != null),
+  isPdfDocument: vi.fn((msg: { message?: { documentMessage?: { mimetype?: string } } }) =>
+    msg.message?.documentMessage != null &&
+    msg.message.documentMessage.mimetype === 'application/pdf',
+  ),
+  processImageMessage: vi.fn(async (msg: { message?: { imageMessage?: { caption?: string; mimetype?: string } } }) => {
+    const caption = msg.message?.imageMessage?.caption || '';
+    const mediaType = 'image/jpeg';
+    const blocks = [];
+    if (caption) blocks.push({ type: 'text', text: caption });
+    blocks.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: 'bW9jaw==' } });
+    return blocks;
+  }),
+  processPdfDocument: vi.fn(async (msg: { message?: { documentMessage?: { caption?: string; fileName?: string } } }) => {
+    const caption = msg.message?.documentMessage?.caption || '';
+    const filename = msg.message?.documentMessage?.fileName || 'document.pdf';
+    return [
+      { type: 'text', text: caption || `[PDF: ${filename}]` },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'bW9jaw==' } },
+    ];
+  }),
+}));
+
 import { WhatsAppChannel, WhatsAppChannelOpts } from './whatsapp.js';
 import { getLastGroupSync, updateChatName, setLastGroupSync } from '../db.js';
 
@@ -486,7 +511,12 @@ describe('WhatsAppChannel', () => {
 
       expect(opts.onMessage).toHaveBeenCalledWith(
         'registered@g.us',
-        expect.objectContaining({ content: 'Check this photo' }),
+        expect.objectContaining({
+          content: expect.arrayContaining([
+            expect.objectContaining({ type: 'text', text: 'Check this photo' }),
+            expect.objectContaining({ type: 'image' }),
+          ]),
+        }),
       );
     });
 
