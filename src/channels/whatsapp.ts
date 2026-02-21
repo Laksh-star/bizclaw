@@ -18,7 +18,14 @@ import {
   updateChatName,
 } from '../db.js';
 import { logger } from '../logger.js';
-import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup } from '../types.js';
+import { isVoiceMessage, transcribeAudioMessage } from '../transcription.js';
+import {
+  isImageMessage,
+  isPdfDocument,
+  processImageMessage,
+  processPdfDocument,
+} from '../media-processing.js';
+import { Channel, OnInboundMessage, OnChatMetadata, RegisteredGroup, ContentBlock } from '../types.js';
 
 const GROUP_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -194,12 +201,53 @@ export class WhatsAppChannel implements Channel {
             ? fromMe
             : content.startsWith(`${ASSISTANT_NAME}:`);
 
+          // Process media messages (voice, images, PDFs)
+          let finalContent: string | ContentBlock[] = content;
+          if (isVoiceMessage(msg)) {
+            try {
+              const transcript = await transcribeAudioMessage(msg, this.sock);
+              if (transcript) {
+                finalContent = `[Voice: ${transcript}]`;
+                logger.info({ chatJid, length: transcript.length }, 'Transcribed voice message');
+              } else {
+                finalContent = '[Voice Message - transcription unavailable]';
+              }
+            } catch (err) {
+              logger.error({ err }, 'Voice transcription error');
+              finalContent = '[Voice Message - transcription failed]';
+            }
+          } else if (isImageMessage(msg)) {
+            try {
+              const contentBlocks = await processImageMessage(msg, this.sock);
+              if (contentBlocks) {
+                finalContent = contentBlocks;
+              } else {
+                finalContent = '[Image - processing unavailable]';
+              }
+            } catch (err) {
+              logger.error({ err }, 'Image processing error');
+              finalContent = '[Image - processing failed]';
+            }
+          } else if (isPdfDocument(msg)) {
+            try {
+              const contentBlocks = await processPdfDocument(msg, this.sock);
+              if (contentBlocks) {
+                finalContent = contentBlocks;
+              } else {
+                finalContent = '[PDF - processing unavailable]';
+              }
+            } catch (err) {
+              logger.error({ err }, 'PDF processing error');
+              finalContent = '[PDF - processing failed]';
+            }
+          }
+
           this.opts.onMessage(chatJid, {
             id: msg.key.id || '',
             chat_jid: chatJid,
             sender,
             sender_name: senderName,
-            content,
+            content: finalContent,
             timestamp,
             is_from_me: fromMe,
             is_bot_message: isBotMessage,

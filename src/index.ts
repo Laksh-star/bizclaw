@@ -42,6 +42,16 @@ import { logger } from './logger.js';
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
 
+// Helper function to extract text content from a message (handles both string and ContentBlock[])
+function getMessageText(msg: NewMessage): string {
+  if (typeof msg.content === 'string') {
+    return msg.content;
+  }
+  // For ContentBlock[], extract text from text blocks
+  const textBlocks = msg.content.filter(b => b.type === 'text');
+  return textBlocks.map((b: any) => b.text).join(' ');
+}
+
 let lastTimestamp = '';
 let sessions: Record<string, string> = {};
 let registeredGroups: Record<string, RegisteredGroup> = {};
@@ -148,7 +158,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   // For non-main groups, check if trigger is required and present
   if (!isMainGroup && group.requiresTrigger !== false) {
     const hasTrigger = missedMessages.some((m) =>
-      TRIGGER_PATTERN.test(m.content.trim()),
+      TRIGGER_PATTERN.test(getMessageText(m).trim()),
     );
     if (!hasTrigger) return true;
   }
@@ -228,7 +238,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
 
 async function runAgent(
   group: RegisteredGroup,
-  prompt: string,
+  prompt: string | import('./types.js').ContentBlock[],
   chatJid: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
 ): Promise<'success' | 'error'> {
@@ -356,7 +366,7 @@ async function startMessageLoop(): Promise<void> {
           // context when a trigger eventually arrives.
           if (needsTrigger) {
             const hasTrigger = groupMessages.some((m) =>
-              TRIGGER_PATTERN.test(m.content.trim()),
+              TRIGGER_PATTERN.test(getMessageText(m).trim()),
             );
             if (!hasTrigger) continue;
           }

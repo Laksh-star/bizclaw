@@ -46,7 +46,7 @@ export interface NewMessage {
   chat_jid: string;
   sender: string;
   sender_name: string;
-  content: string;
+  content: string | ContentBlock[];
   timestamp: string;
   is_from_me?: boolean;
   is_bot_message?: boolean;
@@ -75,6 +75,25 @@ export interface TaskRunLog {
   result: string | null;
   error: string | null;
 }
+
+// --- Claude API content block types ---
+
+export interface ImageSource {
+  type: 'base64';
+  media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  data: string;
+}
+
+export interface DocumentSource {
+  type: 'base64';
+  media_type: 'application/pdf';
+  data: string;
+}
+
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: ImageSource }
+  | { type: 'document'; source: DocumentSource };
 
 // --- Channel abstraction ---
 

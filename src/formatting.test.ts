@@ -199,7 +199,10 @@ describe('trigger gating (requiresTrigger interaction)', () => {
     messages: NewMessage[],
   ): boolean {
     if (!shouldRequireTrigger(isMainGroup, requiresTrigger)) return true;
-    return messages.some((m) => TRIGGER_PATTERN.test(m.content.trim()));
+    return messages.some((m) => {
+      const text = typeof m.content === 'string' ? m.content : '';
+      return TRIGGER_PATTERN.test(text.trim());
+    });
   }
 
   it('main group always processes (no trigger needed)', () => {

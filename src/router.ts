@@ -1,4 +1,4 @@
-import { Channel, NewMessage } from './types.js';
+import { Channel, NewMessage, ContentBlock } from './types.js';
 
 export function escapeXml(s: string): string {
   if (!s) return '';
@@ -9,9 +9,22 @@ export function escapeXml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function formatMessages(messages: NewMessage[]): string {
+export function formatMessages(messages: NewMessage[]): string | ContentBlock[] {
+  // If any message has content blocks, return the structured format
+  const hasContentBlocks = messages.some(
+    m => typeof m.content !== 'string'
+  );
+
+  if (hasContentBlocks) {
+    // For content blocks, return the most recent message's content
+    // (Claude can handle images/PDFs with context from previous text messages)
+    const lastMessage = messages[messages.length - 1];
+    return lastMessage.content;
+  }
+
+  // Otherwise, use text-only XML format (existing behavior)
   const lines = messages.map((m) =>
-    `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content)}</message>`,
+    `<message sender="${escapeXml(m.sender_name)}" time="${m.timestamp}">${escapeXml(m.content as string)}</message>`,
   );
   return `<messages>\n${lines.join('\n')}\n</messages>`;
 }

@@ -5,9 +5,24 @@ import path from 'path';
 import { ASSISTANT_NAME, DATA_DIR, STORE_DIR } from './config.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
-import { NewMessage, RegisteredGroup, ScheduledTask, TaskRunLog } from './types.js';
+import { NewMessage, RegisteredGroup, ScheduledTask, TaskRunLog, ContentBlock } from './types.js';
 
 let db: Database.Database;
+
+// Helper to deserialize content from database (handles both string and JSON-encoded ContentBlock[])
+function deserializeContent(content: string): string | ContentBlock[] {
+  if (!content) return '';
+  // Check if it's JSON (starts with '[' for array)
+  if (content.startsWith('[')) {
+    try {
+      return JSON.parse(content) as ContentBlock[];
+    } catch {
+      // If parse fails, return as-is
+      return content;
+    }
+  }
+  return content;
+}
 
 function createSchema(database: Database.Database): void {
   database.exec(`
@@ -239,6 +254,11 @@ export function setLastGroupSync(): void {
  * Only call this for registered groups where message history is needed.
  */
 export function storeMessage(msg: NewMessage): void {
+  // Serialize ContentBlock arrays to JSON for storage
+  const contentToStore = typeof msg.content === 'string'
+    ? msg.content
+    : JSON.stringify(msg.content);
+
   db.prepare(
     `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -246,7 +266,7 @@ export function storeMessage(msg: NewMessage): void {
     msg.chat_jid,
     msg.sender,
     msg.sender_name,
-    msg.content,
+    contentToStore,
     msg.timestamp,
     msg.is_from_me ? 1 : 0,
     msg.is_bot_message ? 1 : 0,
@@ -301,14 +321,20 @@ export function getNewMessages(
 
   const rows = db
     .prepare(sql)
-    .all(lastTimestamp, ...jids, `${botPrefix}:%`) as NewMessage[];
+    .all(lastTimestamp, ...jids, `${botPrefix}:%`) as any[];
+
+  // Deserialize content from database
+  const messages: NewMessage[] = rows.map(row => ({
+    ...row,
+    content: deserializeContent(row.content)
+  }));
 
   let newTimestamp = lastTimestamp;
   for (const row of rows) {
     if (row.timestamp > newTimestamp) newTimestamp = row.timestamp;
   }
 
-  return { messages: rows, newTimestamp };
+  return { messages, newTimestamp };
 }
 
 export function getMessagesSince(
@@ -326,9 +352,15 @@ export function getMessagesSince(
       AND content != '' AND content IS NOT NULL
     ORDER BY timestamp
   `;
-  return db
+  const rows = db
     .prepare(sql)
-    .all(chatJid, sinceTimestamp, `${botPrefix}:%`) as NewMessage[];
+    .all(chatJid, sinceTimestamp, `${botPrefix}:%`) as any[];
+
+  // Deserialize content from database
+  return rows.map(row => ({
+    ...row,
+    content: deserializeContent(row.content)
+  }));
 }
 
 export function createTask(
