@@ -74,6 +74,7 @@ let fakeSocket: ReturnType<typeof createFakeSocket>;
 vi.mock('@whiskeysockets/baileys', () => {
   return {
     default: vi.fn(() => fakeSocket),
+    fetchLatestBaileysVersion: vi.fn().mockResolvedValue({ version: [2, 3000, 1033846690] }),
     Browsers: { macOS: vi.fn(() => ['macOS', 'Chrome', '']) },
     DisconnectReason: {
       loggedOut: 401,

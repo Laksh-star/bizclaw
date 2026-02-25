@@ -432,7 +432,9 @@ async function runQuery(
         'TeamCreate', 'TeamDelete', 'SendMessage',
         'TodoWrite', 'ToolSearch', 'Skill',
         'NotebookEdit',
-        'mcp__nanoclaw__*'
+        'mcp__nanoclaw__*',
+        'mcp__gmail__*',
+        'mcp__tavily__*'
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -446,6 +448,19 @@ async function runQuery(
             NANOCLAW_CHAT_JID: containerInput.chatJid,
             NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
+            ...(sdkEnv.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: sdkEnv.OPENROUTER_API_KEY as string } : {}),
+            ...(sdkEnv.OPENROUTER_DEFAULT_MODEL ? { OPENROUTER_DEFAULT_MODEL: sdkEnv.OPENROUTER_DEFAULT_MODEL as string } : {}),
+          },
+        },
+        gmail: {
+          command: 'gmail-mcp',
+          args: [],
+        },
+        tavily: {
+          command: 'tavily-mcp',
+          args: [],
+          env: {
+            TAVILY_API_KEY: sdkEnv.TAVILY_API_KEY as string || '',
           },
         },
       },

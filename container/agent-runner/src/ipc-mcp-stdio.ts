@@ -280,6 +280,87 @@ Use available_groups.json to find the JID for a group. The folder name should be
   },
 );
 
+server.tool(
+  'call_model',
+  `Call a non-Claude AI model via OpenRouter for a specific subtask. Use this when a specialized model would handle a step better than you would — e.g. Kimi for editing/writing polish, Gemini for analysis, Perplexity for search-grounded answers.
+
+The model runs independently with no memory of your conversation. Pass all necessary context in the prompt.
+
+If no model is specified, the configured default (OPENROUTER_DEFAULT_MODEL) is used.
+
+Common model IDs:
+• moonshotai/kimi-k2.5 — long-context editing and writing
+• google/gemini-2.0-flash-001 — fast analysis and structured output
+• perplexity/sonar-pro — web-grounded research
+• openai/gpt-4o — general purpose`,
+  {
+    model: z.string().optional().describe('OpenRouter model ID (e.g., "moonshotai/kimi-k2.5"). Omit to use the configured default.'),
+    prompt: z.string().describe('The full prompt to send, including all necessary context'),
+    system: z.string().optional().describe('Optional system prompt to set the model\'s role or constraints'),
+    max_tokens: z.number().int().positive().optional().describe('Maximum tokens to generate. Omit to use the model default.'),
+  },
+  async (args) => {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      return {
+        content: [{ type: 'text' as const, text: 'OPENROUTER_API_KEY is not configured. Add it to .env.' }],
+        isError: true,
+      };
+    }
+
+    const model = args.model || process.env.OPENROUTER_DEFAULT_MODEL;
+    if (!model) {
+      return {
+        content: [{ type: 'text' as const, text: 'No model specified and OPENROUTER_DEFAULT_MODEL is not configured. Pass a model ID or set the default in .env.' }],
+        isError: true,
+      };
+    }
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (args.system) {
+      messages.push({ role: 'system', content: args.system });
+    }
+    messages.push({ role: 'user', content: args.prompt });
+
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'nanoclaw',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          ...(args.max_tokens != null ? { max_tokens: args.max_tokens } : {}),
+        }),
+      });
+
+      const data = await response.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (!response.ok || data.error) {
+        const msg = data.error?.message ?? `HTTP ${response.status}`;
+        return {
+          content: [{ type: 'text' as const, text: `OpenRouter error: ${msg}` }],
+          isError: true,
+        };
+      }
+
+      const text = data.choices?.[0]?.message?.content ?? '';
+      return { content: [{ type: 'text' as const, text }] };
+    } catch (err) {
+      return {
+        content: [{ type: 'text' as const, text: `Request failed: ${err instanceof Error ? err.message : String(err)}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);

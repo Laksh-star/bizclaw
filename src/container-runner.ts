@@ -4,6 +4,7 @@
  */
 import { ChildProcess, exec, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import {
@@ -165,6 +166,16 @@ function buildVolumeMounts(
     readonly: false,
   });
 
+  // Gmail credentials — mount read-write so MCP can refresh tokens
+  const gmailDir = path.join(os.homedir(), '.gmail-mcp');
+  if (fs.existsSync(gmailDir)) {
+    mounts.push({
+      hostPath: gmailDir,
+      containerPath: '/home/node/.gmail-mcp',
+      readonly: false,
+    });
+  }
+
   // Additional mounts validated against external allowlist (tamper-proof from containers)
   if (group.containerConfig?.additionalMounts) {
     const validatedMounts = validateAdditionalMounts(
@@ -183,7 +194,7 @@ function buildVolumeMounts(
  * Secrets are never written to disk or mounted as files.
  */
 function readSecrets(): Record<string, string> {
-  return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY']);
+  return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTER_DEFAULT_MODEL', 'TAVILY_API_KEY']);
 }
 
 function buildContainerArgs(mounts: VolumeMount[], containerName: string): string[] {

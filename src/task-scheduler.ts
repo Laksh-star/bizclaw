@@ -205,6 +205,9 @@ async function runTask(
 
 let schedulerRunning = false;
 
+// Track tasks currently running to prevent re-enqueueing before they finish
+const runningTaskIds = new Set<string>();
+
 export function startSchedulerLoop(deps: SchedulerDependencies): void {
   if (schedulerRunning) {
     logger.debug('Scheduler loop already running, skipping duplicate start');
@@ -221,16 +224,22 @@ export function startSchedulerLoop(deps: SchedulerDependencies): void {
       }
 
       for (const task of dueTasks) {
+        // Skip if already in-flight (task takes longer than poll interval)
+        if (runningTaskIds.has(task.id)) {
+          continue;
+        }
+
         // Re-check task status in case it was paused/cancelled
         const currentTask = getTaskById(task.id);
         if (!currentTask || currentTask.status !== 'active') {
           continue;
         }
 
+        runningTaskIds.add(currentTask.id);
         deps.queue.enqueueTask(
           currentTask.chat_jid,
           currentTask.id,
-          () => runTask(currentTask, deps),
+          () => runTask(currentTask, deps).finally(() => runningTaskIds.delete(currentTask.id)),
         );
       }
     } catch (err) {
