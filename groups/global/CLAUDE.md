@@ -98,4 +98,4 @@ You can send and read emails using these MCP tools:
 - `mcp__gmail__list_labels` — list Gmail labels
 - `mcp__gmail__modify_email` — add/remove labels (e.g. mark as read)
 
-The Gmail account is `movcro5@gmail.com`. Use this for sending reports, notifications, or any email task the user requests.
+The Gmail account is configured during setup. Check `/workspace/group/config.md` for the Gmail address to use, or ask the user which account to send from if not configured.
