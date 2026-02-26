@@ -1,33 +1,24 @@
 <p align="center">
-  <img src="assets/nanoclaw-logo.png" alt="NanoClaw" width="400">
+  <strong>BizClaw</strong>
 </p>
 
 <p align="center">
-  An AI assistant that runs agents securely in their own containers. Lightweight, built to be easily understood and completely customized for your needs.
+  Business AI assistant for WhatsApp and Telegram. Multi-model orchestration, scheduled reports, sales pipeline automation — built on NanoClaw's secure container architecture.
 </p>
 
-<p align="center">
-  <a href="https://nanoclaw.dev">nanoclaw.dev</a>&nbsp; • &nbsp;
-  <a href="README_zh.md">中文</a>&nbsp; • &nbsp;
-  <a href="https://discord.gg/VDdww8qS42"><img src="https://img.shields.io/discord/1470188214710046894?label=Discord&logo=discord&v=2" alt="Discord" valign="middle"></a>&nbsp; • &nbsp;
-  <a href="repo-tokens"><img src="repo-tokens/badge.svg" alt="34.9k tokens, 17% of context window" valign="middle"></a>
-</p>
+> Built on [NanoClaw](https://github.com/qwibitai/nanoclaw) (MIT). BizClaw extends NanoClaw with business-focused capabilities: Telegram support, OpenRouter multi-model orchestration, Tavily search, automated collections reporting, and more.
 
-Using Claude Code, NanoClaw can dynamically rewrite its code to customize its feature set for your needs.
+## Why BizClaw
 
-**New:** First AI assistant to support [Agent Swarms](https://code.claude.com/docs/en/agent-teams). Spin up teams of agents that collaborate in your chat.
+NanoClaw is a great foundation — secure container isolation, small codebase, Claude Agent SDK native. BizClaw adds what businesses actually need: Telegram alongside WhatsApp, non-Claude models via OpenRouter for cost optimization, structured web search with Tavily, and out-of-the-box automated reporting (e.g. daily collections reports from group chats).
 
-## Why I Built NanoClaw
-
-[OpenClaw](https://github.com/openclaw/openclaw) is an impressive project, but I wouldn't have been able to sleep if I had given complex software I didn't understand full access to my life. OpenClaw has nearly half a million lines of code, 53 config files, and 70+ dependencies. Its security is at the application level (allowlists, pairing codes) rather than true OS-level isolation. Everything runs in one Node process with shared memory.
-
-NanoClaw provides that same core functionality, but in a codebase small enough to understand: one process and a handful of files. Claude agents run in their own Linux containers with filesystem isolation, not merely behind permission checks.
+If you're running a team on WhatsApp or Telegram and want an AI assistant that understands your business context, automates reports, and can be deployed for clients — BizClaw is the starting point.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/qwibitai/NanoClaw.git
-cd NanoClaw
+git clone https://github.com/Laksh-star/bizclaw.git
+cd bizclaw
 claude
 ```
 

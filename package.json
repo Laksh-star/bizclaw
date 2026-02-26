@@ -1,7 +1,7 @@
 {
-  "name": "nanoclaw",
+  "name": "bizclaw",
   "version": "1.1.2",
-  "description": "Personal Claude assistant. Lightweight, secure, customizable.",
+  "description": "Business AI assistant for WhatsApp and Telegram. Built on NanoClaw (MIT).",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
