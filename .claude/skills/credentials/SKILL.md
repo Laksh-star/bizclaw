@@ -56,7 +56,17 @@ agent-browser open https://godaddy.com/dashboard
 
 ## Approach B: Inject Cookies from JSON Export
 
-Use when you've exported cookies from Cookie-Editor (JSON format).
+Use when you've exported cookies from a browser. Two JSON formats are supported:
+
+**Format 1 — Key-value object** (simpler, from DevTools or manual export):
+```json
+{ "cookie_name": "cookie_value", "other_name": "other_value" }
+```
+
+**Format 2 — Cookie-Editor array** (full metadata):
+```json
+[{ "name": "cookie_name", "value": "cookie_value", "domain": ".example.com", "path": "/" }]
+```
 
 **Step 1: Save the JSON cookie file**
 
@@ -70,27 +80,32 @@ When user pastes JSON cookies, write them to:
 ```bash
 # Must open the site BEFORE injecting (browser needs a page context)
 agent-browser open https://godaddy.com
+agent-browser wait --load networkidle
 
-# Inject all cookies via JavaScript eval
-# Read the cookie file and build the eval string:
+# Inject all cookies via JavaScript eval — handles both formats automatically:
 COOKIES=$(cat /workspace/group/credentials/cookies/godaddy-cookies.json)
 
 agent-browser eval "
-  const cookies = $COOKIES;
-  cookies.forEach(c => {
-    let str = c.name + '=' + encodeURIComponent(c.value);
-    if (c.path) str += '; path=' + c.path;
-    if (c.secure) str += '; secure';
-    document.cookie = str;
+  const raw = $COOKIES;
+  const entries = Array.isArray(raw)
+    ? raw.map(c => [c.name, c.value])
+    : Object.entries(raw);
+  let count = 0;
+  entries.forEach(([name, value]) => {
+    document.cookie = name + '=' + value + '; path=/; domain=.godaddy.com';
+    count++;
   });
-  document.cookie.split(';').length + ' cookies set';
+  count + ' cookies injected';
 "
 
 # Reload to apply cookies
 agent-browser reload
 agent-browser wait --load networkidle
 
-# Verify you're logged in
+# Check current URL — if redirected to dashboard/account, login worked
+agent-browser get url
+
+# Snapshot to verify login state
 agent-browser snapshot -i
 
 # Save state so you don't need to re-inject next time
@@ -100,7 +115,7 @@ agent-browser close
 
 > **Why open first?** `eval` runs in the browser's JS context, not Node. The page must be loaded for `document.cookie` to work.
 
-> **Limitation:** `httpOnly` cookies cannot be set via `document.cookie` — they're only sent by the server. If the site uses httpOnly for its auth token, Approach A (state save) is more reliable.
+> **Limitation:** `httpOnly` cookies cannot be set via `document.cookie` — they're only sent by the server. If login still fails after injection, use Approach A (state save after real login) instead.
 
 ---
 
