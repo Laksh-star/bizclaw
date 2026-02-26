@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Run initial NanoClaw setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure nanoclaw", or first-time setup requests.
+description: Run initial BizClaw/NanoClaw setup. Use when user wants to install dependencies, authenticate WhatsApp, register their main channel, or start the background services. Triggers on "setup", "install", "configure bizclaw", "configure nanoclaw", or first-time setup requests.
 ---
 
 # NanoClaw Setup
@@ -172,6 +172,103 @@ Run `npx tsx setup/index.ts --step verify` and parse the status block.
 - MOUNT_ALLOWLIST=missing → `npx tsx setup/index.ts --step mounts -- --empty`
 
 Tell user to test: send a message in their registered chat. Show: `tail -f logs/nanoclaw.log`
+
+## 12. BizClaw Extras
+
+After core setup is verified, configure BizClaw-specific features. Each is optional — skip if user declines.
+
+### 12a. Assistant Name
+
+AskUserQuestion: What should the assistant be called? (default: Andy)
+
+If not Andy, update `ASSISTANT_NAME` in `.env`:
+```bash
+echo "ASSISTANT_NAME=<name>" >> .env
+```
+Then update `groups/global/CLAUDE.md` and `groups/main/CLAUDE.md` — replace "Andy" with the chosen name in the first line and throughout.
+
+### 12b. OpenRouter (Multi-Model AI)
+
+AskUserQuestion: Do you want to enable multi-model AI via OpenRouter? This lets the assistant use non-Claude models (e.g. Kimi K2.5, Gemini) for analysis and writing tasks — useful for cost optimization.
+
+If yes:
+- Ask for `OPENROUTER_API_KEY` — tell user to get it from openrouter.ai
+- Ask for default model (suggest `moonshotai/kimi-k2.5`, or user can specify)
+- Add to `.env`:
+```bash
+OPENROUTER_API_KEY=<key>
+OPENROUTER_DEFAULT_MODEL=<model>
+```
+- Also copy to `data/env/env` (container environment):
+```bash
+cp .env data/env/env
+```
+
+### 12c. Tavily Search
+
+AskUserQuestion: Do you want to enable Tavily for structured web search? Tavily returns better results with source citations compared to basic web search.
+
+If yes:
+- Ask for `TAVILY_API_KEY` — tell user to get it from tavily.com
+- Add to `.env` and `data/env/env`:
+```bash
+TAVILY_API_KEY=<key>
+```
+
+### 12d. Gmail
+
+AskUserQuestion: Do you want to set up Gmail integration? This lets the assistant send and read emails.
+
+If yes: run `/add-gmail` now.
+
+Also ask: What Gmail address will the assistant send from?
+- Add to `groups/global/config.md` (create if it doesn't exist):
+```
+# BizClaw Instance Configuration
+
+## Gmail
+Account: <gmail address>
+
+## Owner
+Name: <user name>
+```
+
+### 12e. Telegram
+
+AskUserQuestion: Do you want to add Telegram as a channel (in addition to WhatsApp)?
+
+If yes: run `/add-telegram` now.
+
+### 12f. Sync .env to container
+
+After any `.env` changes, sync to the container environment file:
+```bash
+cp .env data/env/env
+```
+
+Then restart the service to apply:
+- macOS: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
+- Linux: `systemctl --user restart nanoclaw`
+
+### 12g. Collections Report
+
+AskUserQuestion: Do you want to set up a daily automated collections/payments report from a group chat?
+
+If yes: run `/setup-collections-report` now.
+
+### Summary
+
+After completing the extras, show a summary of what was configured:
+- ✅/❌ OpenRouter (model name if enabled)
+- ✅/❌ Tavily search
+- ✅/❌ Gmail (account if configured)
+- ✅/❌ Telegram
+- ✅/❌ Collections report
+
+BizClaw is ready. Remind user:
+- Send a message in their WhatsApp/Telegram chat to test
+- Run `/setup-collections-report` anytime to add a new automated report
+- Run `/customize` to change behavior or add integrations
 
 ## Troubleshooting
 
