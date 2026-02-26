@@ -18,6 +18,7 @@
 | Web search | Basic | ✅ Tavily MCP (structured, cited) |
 | Multi-model AI | Claude only | ✅ OpenRouter (Kimi, Gemini, any model) |
 | Daily collections report | ❌ | ✅ `/setup-collections-report` skill |
+| Sales CRM | ❌ | ✅ `/setup-sales-crm` skill |
 | Apple Container | Via skill | ✅ Default runtime |
 | Gmail | Via skill | ✅ Built-in |
 
@@ -59,6 +60,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 | Skill | What it does |
 |-------|-------------|
 | `/setup` | First-time installation and authentication |
+| `/setup-sales-crm` | Lightweight sales CRM in any group — track leads, pipeline, deals; weekly report by email |
 | `/setup-collections-report` | Daily AI-analyzed payment/collections report from any group chat, emailed to stakeholders |
 | `/add-gmail` | Add Gmail send/receive integration |
 | `/add-telegram` | Add Telegram channel |
