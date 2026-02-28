@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 import { transcribeAudioBuffer } from '../transcription.js';
 import {
   Channel,
+  ContentBlock,
   OnChatMetadata,
   OnInboundMessage,
   RegisteredGroup,
@@ -148,7 +149,55 @@ export class TelegramChannel implements Channel {
       });
     };
 
-    this.bot.on('message:photo', (ctx: Context) => storeNonText(ctx, '[Photo]'));
+    this.bot.on('message:photo', async (ctx: Context) => {
+      const chatJid = `tg:${ctx.chat!.id}`;
+      const group = this.opts.registeredGroups()[chatJid];
+      if (!group) return;
+
+      const timestamp = new Date(ctx.message!.date * 1000).toISOString();
+      const senderName =
+        ctx.from?.first_name ||
+        ctx.from?.username ||
+        ctx.from?.id?.toString() ||
+        'Unknown';
+      const captionText = ctx.message!.caption || '';
+
+      this.opts.onChatMetadata(chatJid, timestamp);
+
+      let content: string | ContentBlock[];
+      try {
+        // Pick the largest available photo size
+        const photos = ctx.message!.photo as Array<{ file_id: string; width: number; height: number }>;
+        const largest = photos[photos.length - 1];
+        const file = await ctx.api.getFile(largest.file_id);
+        const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
+        const response = await fetch(fileUrl);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const base64 = buffer.toString('base64');
+
+        const blocks: ContentBlock[] = [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+        ];
+        if (captionText) {
+          blocks.push({ type: 'text', text: captionText });
+        }
+        content = blocks;
+        logger.info({ chatJid, bytes: buffer.length }, 'Telegram photo downloaded');
+      } catch (err) {
+        logger.error({ err }, 'Telegram photo download error');
+        content = `[Photo${captionText ? ` - ${captionText}` : ''}]`;
+      }
+
+      this.opts.onMessage(chatJid, {
+        id: ctx.message!.message_id.toString(),
+        chat_jid: chatJid,
+        sender: ctx.from?.id?.toString() || '',
+        sender_name: senderName,
+        content,
+        timestamp,
+        is_from_me: false,
+      });
+    });
     this.bot.on('message:video', (ctx: Context) => storeNonText(ctx, '[Video]'));
     this.bot.on('message:voice', async (ctx: Context) => {
       const chatJid = `tg:${ctx.chat!.id}`;

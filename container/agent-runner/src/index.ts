@@ -190,6 +190,38 @@ function createPreCompactHook(assistantName?: string): HookCallback {
 // be visible to commands Kit runs.
 const SECRET_ENV_VARS = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'];
 
+const MOVIE_KEYWORDS = [
+  'movie', 'film', 'cinema', 'theater', 'theatre', 'playing', 'now playing',
+  'streaming', 'netflix', 'amazon prime', 'hotstar', 'disney+', 'prime video',
+  'box office', 'release date', 'actor', 'actress', 'director', 'cast',
+  'imdb', 'tmdb', 'tv show', 'tv series', 'web series', 'episode', 'season',
+  'anime', 'bollywood', 'hollywood', 'tollywood', 'kollywood', 'watchlist',
+  'watch tonight', 'what to watch', 'recommend.*movie', 'recommend.*film',
+  'trending movie', 'trending film', 'new movie', 'latest movie',
+];
+
+function createTavilyMovieBlockHook(): HookCallback {
+  return async (input, _toolUseId, _context) => {
+    const preInput = input as PreToolUseHookInput;
+    const queryArg = (preInput.tool_input as { query?: string })?.query?.toLowerCase() || '';
+    const isMovieQuery = MOVIE_KEYWORDS.some(kw => queryArg.includes(kw) || new RegExp(kw).test(queryArg));
+    if (isMovieQuery) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason:
+            'Movie/TV queries must use TMDB MCP tools, not Tavily. ' +
+            'Available tools: mcp__tmdb__get_now_playing (theaters), mcp__tmdb__search_movies, ' +
+            'mcp__tmdb__get_trending, mcp__tmdb__get_movie_details, mcp__tmdb__get_watch_providers, ' +
+            'mcp__tmdb__search_tv_shows, mcp__tmdb__get_trending_tv. Use these instead.',
+        },
+      };
+    }
+    return {};
+  };
+}
+
 function createSanitizeBashHook(): HookCallback {
   return async (input, _toolUseId, _context) => {
     const preInput = input as PreToolUseHookInput;
@@ -465,16 +497,21 @@ async function runQuery(
           },
         },
         tmdb: {
-          command: 'mcp-server-tmdb',
-          args: [],
+          command: 'node',
+          args: ['/opt/mcp-server-tmdb/dist/index.js'],
           env: {
             TMDB_API_KEY: sdkEnv.TMDB_API_KEY as string || '',
+            // Proxy TMDB calls through the host (macOS) to avoid Apple Container CloudFront routing issues.
+            TMDB_BASE_URL: 'http://192.168.64.1:7878/tmdb',
           },
         },
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],
-        PreToolUse: [{ matcher: 'Bash', hooks: [createSanitizeBashHook()] }],
+        PreToolUse: [
+          { matcher: 'Bash', hooks: [createSanitizeBashHook()] },
+          { matcher: 'mcp__tavily__*', hooks: [createTavilyMovieBlockHook()] },
+        ],
       },
     }
   })) {

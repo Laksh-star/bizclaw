@@ -37,6 +37,7 @@ import {
 import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
+import http from 'http';
 import { findChannel, formatMessages, formatOutbound } from './router.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
@@ -484,8 +485,51 @@ function ensureContainerSystemRunning(): void {
   }
 }
 
+/**
+ * TMDB proxy: Apple Container VMs have unreliable direct connectivity to CloudFront IPs.
+ * This proxy runs on the host (macOS) which has reliable internet, and containers call
+ * http://192.168.64.1:7878/tmdb/<path>?<params> instead of hitting TMDB directly.
+ */
+const TMDB_PROXY_PORT = 7878;
+const TMDB_PROXY_HOST = '0.0.0.0';
+const TMDB_API_BASE = 'https://api.themoviedb.org/3';
+
+function startTmdbProxy(): void {
+  const server = http.createServer((req, res) => {
+    const url = req.url || '';
+    if (!url.startsWith('/tmdb/') && url !== '/tmdb') {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    const tmdbPath = url.slice('/tmdb'.length); // keeps leading /
+    const tmdbUrl = `${TMDB_API_BASE}${tmdbPath}`;
+    fetch(tmdbUrl)
+      .then(async (r) => {
+        const body = await r.text();
+        res.writeHead(r.status, { 'Content-Type': 'application/json' });
+        res.end(body);
+      })
+      .catch((err: Error) => {
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: err.message }));
+      });
+  });
+  server.listen(TMDB_PROXY_PORT, TMDB_PROXY_HOST, () => {
+    logger.info({ port: TMDB_PROXY_PORT }, 'TMDB proxy listening');
+  });
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.warn({ port: TMDB_PROXY_PORT }, 'TMDB proxy port already in use — skipping');
+    } else {
+      logger.error({ err }, 'TMDB proxy error');
+    }
+  });
+}
+
 async function main(): Promise<void> {
   ensureContainerSystemRunning();
+  startTmdbProxy();
   initDatabase();
   logger.info('Database initialized');
   loadState();
