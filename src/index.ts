@@ -38,7 +38,7 @@ import { GroupQueue } from './group-queue.js';
 import { resolveGroupFolderPath } from './group-folder.js';
 import { startIpcWatcher } from './ipc.js';
 import http from 'http';
-import { findChannel, formatMessages, formatOutbound } from './router.js';
+import { findChannel, formatMessages, formatOutbound, stripInternalTags } from './router.js';
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
@@ -198,7 +198,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   const output = await runAgent(group, prompt, chatJid, async (result) => {
     // Streaming partial — update the draft preview
     if (result.partial) {
-      const partialText = result.partial.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
+      const partialText = stripInternalTags(result.partial);
       if (partialText) {
         await channel.streamPartial?.(chatJid, draftId, partialText);
       }
@@ -209,7 +209,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     if (result.result) {
       const raw = typeof result.result === 'string' ? result.result : JSON.stringify(result.result);
       // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
-      const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
+      const text = stripInternalTags(raw);
       logger.info({ group: group.name }, `Agent output: ${raw.slice(0, 200)}`);
       if (text) {
         await channel.sendMessage(chatJid, text);

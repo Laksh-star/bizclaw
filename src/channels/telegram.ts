@@ -17,6 +17,14 @@ export interface TelegramChannelOpts {
   registeredGroups: () => Record<string, RegisteredGroup>;
 }
 
+// Telegram's per-message character limit
+const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
+
+// Extract the numeric chat ID from a tg: JID
+function telegramChatId(jid: string): number {
+  return parseInt(jid.replace(/^tg:/, ''), 10);
+}
+
 export class TelegramChannel implements Channel {
   name = 'telegram';
 
@@ -282,17 +290,16 @@ export class TelegramChannel implements Channel {
     }
 
     try {
-      const numericId = jid.replace(/^tg:/, '');
+      const numericId = telegramChatId(jid);
 
       // Telegram has a 4096 character limit per message — split if needed
-      const MAX_LENGTH = 4096;
-      if (text.length <= MAX_LENGTH) {
+      if (text.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
         await this.bot.api.sendMessage(numericId, text);
       } else {
-        for (let i = 0; i < text.length; i += MAX_LENGTH) {
+        for (let i = 0; i < text.length; i += TELEGRAM_MAX_MESSAGE_LENGTH) {
           await this.bot.api.sendMessage(
             numericId,
-            text.slice(i, i + MAX_LENGTH),
+            text.slice(i, i + TELEGRAM_MAX_MESSAGE_LENGTH),
           );
         }
       }
@@ -321,8 +328,7 @@ export class TelegramChannel implements Channel {
   async setTyping(jid: string, isTyping: boolean): Promise<void> {
     if (!this.bot || !isTyping) return;
     try {
-      const numericId = jid.replace(/^tg:/, '');
-      await this.bot.api.sendChatAction(numericId, 'typing');
+      await this.bot.api.sendChatAction(telegramChatId(jid), 'typing');
     } catch (err) {
       logger.debug({ jid, err }, 'Failed to send Telegram typing indicator');
     }
@@ -330,11 +336,12 @@ export class TelegramChannel implements Channel {
 
   async streamPartial(jid: string, draftId: number, text: string): Promise<void> {
     if (!this.bot) return;
-    const numericId = parseInt(jid.replace(/^tg:/, ''), 10);
+    const numericId = telegramChatId(jid);
     // sendMessageDraft only works in private chats (positive chat IDs)
     if (numericId <= 0) return;
-    const MAX_DRAFT_LENGTH = 4096;
-    const truncated = text.length > MAX_DRAFT_LENGTH ? text.slice(0, MAX_DRAFT_LENGTH) : text;
+    const truncated = text.length > TELEGRAM_MAX_MESSAGE_LENGTH
+      ? text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH)
+      : text;
     try {
       await this.bot.api.sendMessageDraft(numericId, draftId, truncated);
     } catch (err) {
