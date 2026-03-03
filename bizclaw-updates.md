@@ -4,6 +4,28 @@ Track of features, skills, and architectural decisions specific to BizClaw (fork
 
 ---
 
+## v0.7 — Mar 3, 2026
+
+### LM Studio Integration (local network model calling)
+
+- **`call_lm_studio` MCP tool** — Andy can now call models running in LM Studio on the local network (`192.168.1.11:1234`). Zero API cost, fully private.
+- **Auto-selects active model** — `model` param is optional; omitting it lets LM Studio use whichever model is currently loaded.
+- **OpenAI-compatible API** — no API key required, direct HTTP fetch to `LM_STUDIO_BASE_URL`.
+- **7 models available**: `google/gemma-3-4b`, `liquid/lfm2-24b-a2b`, `openai/gpt-oss-20b`, `mistralai/devstral-small-2-2512`, `nvidia-nemotron-3-nano-30b-a3b-mlx`, `minicpm-o-4_5`, `nanbeige4.1-3b`
+- **Secrets pipeline**: `LM_STUDIO_BASE_URL` flows `.env` → `readSecrets()` → `containerInput.secrets` → `sdkEnv` → nanoclaw MCP server env
+
+### Files Changed
+- `container/agent-runner/src/ipc-mcp-stdio.ts` — `call_lm_studio` tool added
+- `container/agent-runner/src/index.ts` — `LM_STUDIO_BASE_URL` forwarded to nanoclaw MCP env
+- `src/container-runner.ts` — `LM_STUDIO_BASE_URL` added to `readSecrets()`
+- `.env` + `data/env/env` — `LM_STUDIO_BASE_URL=http://192.168.1.11:1234/v1` added
+
+### Cleanup (same session)
+- Freed ~10 GB disk: removed orphaned container, buildkit, and `node:22-slim` base image
+- Disk: 81% (2.7 GB free) → 48% (13 GB free)
+
+---
+
 ## v0.6 — Mar 3, 2026
 
 ### Telegram Native Streaming (sendMessageDraft)

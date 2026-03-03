@@ -491,6 +491,7 @@ async function runQuery(
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
             ...(sdkEnv.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: sdkEnv.OPENROUTER_API_KEY as string } : {}),
             ...(sdkEnv.OPENROUTER_DEFAULT_MODEL ? { OPENROUTER_DEFAULT_MODEL: sdkEnv.OPENROUTER_DEFAULT_MODEL as string } : {}),
+            ...(sdkEnv.LM_STUDIO_BASE_URL ? { LM_STUDIO_BASE_URL: sdkEnv.LM_STUDIO_BASE_URL as string } : {}),
           },
         },
         gmail: {

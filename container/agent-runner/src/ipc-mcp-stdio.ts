@@ -357,6 +357,76 @@ Common model IDs:
   },
 );
 
+server.tool(
+  'call_lm_studio',
+  `Call a locally-hosted model via LM Studio (running on the local network). Free — no API cost. Use for tasks where a local model is sufficient: drafting, summarising, classification, translation, code explanation.
+
+Omit the model parameter to use whichever model is currently active in LM Studio.
+
+Available models:
+• google/gemma-3-4b — fast, good for quick tasks
+• liquid/lfm2-24b-a2b — capable 24B MoE, good general purpose
+• openai/gpt-oss-20b — OpenAI open-source 20B
+• mistralai/devstral-small-2-2512 — code-focused
+• nvidia-nemotron-3-nano-30b-a3b-mlx — 30B MoE, MLX-optimised
+• minicpm-o-4_5 — multimodal (text + image)
+• nanbeige4.1-3b — small, very fast
+
+The model runs independently with no memory of your conversation. Pass all necessary context in the prompt.`,
+  {
+    model: z.string().optional().describe('LM Studio model ID (e.g. "liquid/lfm2-24b-a2b"). Omit to use the currently active model.'),
+    prompt: z.string().describe('The full prompt to send, including all necessary context'),
+    system: z.string().optional().describe('Optional system prompt'),
+    max_tokens: z.number().int().positive().optional().describe('Maximum tokens to generate'),
+  },
+  async (args) => {
+    const baseUrl = process.env.LM_STUDIO_BASE_URL;
+    if (!baseUrl) {
+      return {
+        content: [{ type: 'text' as const, text: 'LM_STUDIO_BASE_URL is not configured. Add it to .env.' }],
+        isError: true,
+      };
+    }
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (args.system) messages.push({ role: 'system', content: args.system });
+    messages.push({ role: 'user', content: args.prompt });
+
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(args.model ? { model: args.model } : {}),
+          messages,
+          ...(args.max_tokens != null ? { max_tokens: args.max_tokens } : {}),
+        }),
+      });
+
+      const data = await response.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (!response.ok || data.error) {
+        const msg = data.error?.message ?? `HTTP ${response.status}`;
+        return {
+          content: [{ type: 'text' as const, text: `LM Studio error: ${msg}` }],
+          isError: true,
+        };
+      }
+
+      const text = data.choices?.[0]?.message?.content ?? '';
+      return { content: [{ type: 'text' as const, text }] };
+    } catch (err) {
+      return {
+        content: [{ type: 'text' as const, text: `Request failed: ${err instanceof Error ? err.message : String(err)}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
 // Start the stdio transport
 const transport = new StdioServerTransport();
 await server.connect(transport);
