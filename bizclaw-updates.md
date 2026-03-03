@@ -4,6 +4,25 @@ Track of features, skills, and architectural decisions specific to BizClaw (fork
 
 ---
 
+## v0.6 — Mar 3, 2026
+
+### Telegram Native Streaming (sendMessageDraft)
+
+- **`sendMessageDraft` integration** — Andy now streams responses to Telegram DMs using the Bot API 9.5 native streaming method (released Mar 1, 2026, 2 days ago). Users see the response being typed in real-time rather than receiving it all at once.
+- **Turn-level streaming** — The Claude Agent SDK emits complete assistant turns (not token deltas). Each turn's text is forwarded as a draft update; the final `sendMessage` commits the response and the draft preview dismisses.
+- **`draft_id` stability** — A unique non-zero `draftId` is generated per response session (`Date.now() % 2_000_000_000 + 1`). Repeated calls with the same `draft_id` update the same draft with animation.
+- **DM-only** — `sendMessageDraft` only works in private chats (positive chat IDs). Groups fall back to the existing `sendMessage` behavior.
+- **`<internal>` stripping applied** — Partial text has internal reasoning blocks stripped before being sent as a draft, same as final results.
+
+### Files Changed
+- `container/agent-runner/src/index.ts` — Emit `PARTIAL` markers from `assistant` SDK messages
+- `src/container-runner.ts` — Parse `PARTIAL` markers in-order with `OUTPUT` markers; `ContainerOutput.partial?: string`
+- `src/types.ts` — `Channel.streamPartial?(jid, draftId, text)` optional method
+- `src/channels/telegram.ts` — `streamPartial()` implementation via `bot.api.sendMessageDraft()`
+- `src/index.ts` — Generate `draftId` per response, call `streamPartial` on partials
+
+---
+
 ## v0.5 — Feb 28, 2026
 
 ### Skills Added
@@ -137,7 +156,7 @@ Track of features, skills, and architectural decisions specific to BizClaw (fork
 | Multi-model | `container/agent-runner/src/index.ts` | Tavily MCP, OpenRouter envs |
 | Multi-model | `container/Dockerfile` | `tavily-mcp` global install |
 | Multi-model | `src/container-runner.ts` | OPENROUTER_*, TAVILY_API_KEY secrets |
-| Telegram | `src/channels/telegram.ts` | Voice transcription |
+| Telegram | `src/channels/telegram.ts` | Voice transcription, `sendMessageDraft` streaming |
 | Scheduler | `src/task-scheduler.ts` | `runningTaskIds`, 60s idle timeout |
 | Config | `src/config.ts` | INSTANCE_NAME, scoped paths |
 | Build | `container/build.sh` | INSTANCE_NAME-based image name |

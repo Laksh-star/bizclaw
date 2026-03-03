@@ -107,11 +107,19 @@ async function readStdin(): Promise<string> {
 
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+const PARTIAL_START_MARKER = '---NANOCLAW_PARTIAL_START---';
+const PARTIAL_END_MARKER = '---NANOCLAW_PARTIAL_END---';
 
 function writeOutput(output: ContainerOutput): void {
   console.log(OUTPUT_START_MARKER);
   console.log(JSON.stringify(output));
   console.log(OUTPUT_END_MARKER);
+}
+
+function writePartial(text: string): void {
+  console.log(PARTIAL_START_MARKER);
+  console.log(JSON.stringify({ partial: text }));
+  console.log(PARTIAL_END_MARKER);
 }
 
 function log(message: string): void {
@@ -521,6 +529,15 @@ async function runQuery(
 
     if (message.type === 'assistant' && 'uuid' in message) {
       lastAssistantUuid = (message as { uuid: string }).uuid;
+      // Emit partial text for streaming preview (e.g. Telegram sendMessageDraft)
+      const content = (message as { message?: { content?: unknown } }).message?.content;
+      if (Array.isArray(content)) {
+        const text = content
+          .filter((b: { type: string }) => b.type === 'text')
+          .map((b: { text: string }) => b.text)
+          .join('');
+        if (text) writePartial(text);
+      }
     }
 
     if (message.type === 'system' && message.subtype === 'init') {

@@ -26,6 +26,8 @@ import { RegisteredGroup, ContentBlock } from './types.js';
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
 const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
+const PARTIAL_START_MARKER = '---NANOCLAW_PARTIAL_START---';
+const PARTIAL_END_MARKER = '---NANOCLAW_PARTIAL_END---';
 
 export interface ContainerInput {
   prompt: string | ContentBlock[];
@@ -41,6 +43,7 @@ export interface ContainerInput {
 export interface ContainerOutput {
   status: 'success' | 'error';
   result: string | null;
+  partial?: string;
   newSessionId?: string;
   error?: string;
 }
@@ -310,35 +313,63 @@ export async function runContainerAgent(
         }
       }
 
-      // Stream-parse for output markers
+      // Stream-parse for output and partial markers (processed in arrival order)
       if (onOutput) {
         parseBuffer += chunk;
-        let startIdx: number;
-        while ((startIdx = parseBuffer.indexOf(OUTPUT_START_MARKER)) !== -1) {
-          const endIdx = parseBuffer.indexOf(OUTPUT_END_MARKER, startIdx);
-          if (endIdx === -1) break; // Incomplete pair, wait for more data
+        while (true) {
+          const outputIdx = parseBuffer.indexOf(OUTPUT_START_MARKER);
+          const partialIdx = parseBuffer.indexOf(PARTIAL_START_MARKER);
 
-          const jsonStr = parseBuffer
-            .slice(startIdx + OUTPUT_START_MARKER.length, endIdx)
-            .trim();
-          parseBuffer = parseBuffer.slice(endIdx + OUTPUT_END_MARKER.length);
+          // Pick whichever marker appears first in the buffer
+          const isOutput = outputIdx !== -1 && (partialIdx === -1 || outputIdx < partialIdx);
+          const isPartial = partialIdx !== -1 && (outputIdx === -1 || partialIdx < outputIdx);
 
-          try {
-            const parsed: ContainerOutput = JSON.parse(jsonStr);
-            if (parsed.newSessionId) {
-              newSessionId = parsed.newSessionId;
+          if (isPartial) {
+            const endIdx = parseBuffer.indexOf(PARTIAL_END_MARKER, partialIdx);
+            if (endIdx === -1) break; // Incomplete pair, wait for more data
+            const jsonStr = parseBuffer
+              .slice(partialIdx + PARTIAL_START_MARKER.length, endIdx)
+              .trim();
+            parseBuffer = parseBuffer.slice(endIdx + PARTIAL_END_MARKER.length);
+            try {
+              const parsed = JSON.parse(jsonStr) as { partial: string };
+              if (parsed.partial) {
+                resetTimeout();
+                outputChain = outputChain.then(() =>
+                  onOutput({ status: 'success', result: null, partial: parsed.partial }),
+                );
+              }
+            } catch (err) {
+              logger.warn({ group: group.name, error: err }, 'Failed to parse streamed partial chunk');
             }
-            hadStreamingOutput = true;
-            // Activity detected — reset the hard timeout
-            resetTimeout();
-            // Call onOutput for all markers (including null results)
-            // so idle timers start even for "silent" query completions.
-            outputChain = outputChain.then(() => onOutput(parsed));
-          } catch (err) {
-            logger.warn(
-              { group: group.name, error: err },
-              'Failed to parse streamed output chunk',
-            );
+          } else if (isOutput) {
+            const endIdx = parseBuffer.indexOf(OUTPUT_END_MARKER, outputIdx);
+            if (endIdx === -1) break; // Incomplete pair, wait for more data
+
+            const jsonStr = parseBuffer
+              .slice(outputIdx + OUTPUT_START_MARKER.length, endIdx)
+              .trim();
+            parseBuffer = parseBuffer.slice(endIdx + OUTPUT_END_MARKER.length);
+
+            try {
+              const parsed: ContainerOutput = JSON.parse(jsonStr);
+              if (parsed.newSessionId) {
+                newSessionId = parsed.newSessionId;
+              }
+              hadStreamingOutput = true;
+              // Activity detected — reset the hard timeout
+              resetTimeout();
+              // Call onOutput for all markers (including null results)
+              // so idle timers start even for "silent" query completions.
+              outputChain = outputChain.then(() => onOutput(parsed));
+            } catch (err) {
+              logger.warn(
+                { group: group.name, error: err },
+                'Failed to parse streamed output chunk',
+              );
+            }
+          } else {
+            break; // No complete marker found, wait for more data
           }
         }
       }

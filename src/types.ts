@@ -106,6 +106,9 @@ export interface Channel {
   disconnect(): Promise<void>;
   // Optional: typing indicator. Channels that support it implement it.
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
+  // Optional: stream a partial response (e.g. Telegram sendMessageDraft).
+  // draftId must be a stable non-zero integer for the duration of one response.
+  streamPartial?(jid: string, draftId: number, text: string): Promise<void>;
 }
 
 // Callback type that channels use to deliver inbound messages

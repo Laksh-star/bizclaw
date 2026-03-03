@@ -327,4 +327,18 @@ export class TelegramChannel implements Channel {
       logger.debug({ jid, err }, 'Failed to send Telegram typing indicator');
     }
   }
+
+  async streamPartial(jid: string, draftId: number, text: string): Promise<void> {
+    if (!this.bot) return;
+    const numericId = parseInt(jid.replace(/^tg:/, ''), 10);
+    // sendMessageDraft only works in private chats (positive chat IDs)
+    if (numericId <= 0) return;
+    const MAX_DRAFT_LENGTH = 4096;
+    const truncated = text.length > MAX_DRAFT_LENGTH ? text.slice(0, MAX_DRAFT_LENGTH) : text;
+    try {
+      await this.bot.api.sendMessageDraft(numericId, draftId, truncated);
+    } catch (err) {
+      logger.debug({ jid, err }, 'Failed to send Telegram message draft');
+    }
+  }
 }
