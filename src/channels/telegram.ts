@@ -1,6 +1,7 @@
 import { Bot, Context } from 'grammy';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
+import { sendTelegramDraft } from './telegram-streaming.js';
 import { logger } from '../logger.js';
 import { transcribeAudioBuffer } from '../transcription.js';
 import {
@@ -336,16 +337,6 @@ export class TelegramChannel implements Channel {
 
   async streamPartial(jid: string, draftId: number, text: string): Promise<void> {
     if (!this.bot) return;
-    const numericId = telegramChatId(jid);
-    // sendMessageDraft only works in private chats (positive chat IDs)
-    if (numericId <= 0) return;
-    const truncated = text.length > TELEGRAM_MAX_MESSAGE_LENGTH
-      ? text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH)
-      : text;
-    try {
-      await this.bot.api.sendMessageDraft(numericId, draftId, truncated);
-    } catch (err) {
-      logger.debug({ jid, err }, 'Failed to send Telegram message draft');
-    }
+    await sendTelegramDraft(this.bot, jid, telegramChatId(jid), draftId, text);
   }
 }

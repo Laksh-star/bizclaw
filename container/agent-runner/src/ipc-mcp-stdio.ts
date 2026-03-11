@@ -10,6 +10,7 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { CronExpressionParser } from 'cron-parser';
+import { registerBizclawTools } from './bizclaw-tools.js';
 
 const IPC_DIR = '/workspace/ipc';
 const MESSAGES_DIR = path.join(IPC_DIR, 'messages');
@@ -276,156 +277,8 @@ Use available_groups.json to find the JID for a group. The folder name should be
   },
 );
 
-server.tool(
-  'call_model',
-  `Call a non-Claude AI model via OpenRouter for a specific subtask. Use this when a specialized model would handle a step better than you would — e.g. Kimi for editing/writing polish, Gemini for analysis, Perplexity for search-grounded answers.
-
-The model runs independently with no memory of your conversation. Pass all necessary context in the prompt.
-
-If no model is specified, the configured default (OPENROUTER_DEFAULT_MODEL) is used.
-
-Common model IDs:
-• moonshotai/kimi-k2.5 — long-context editing and writing
-• google/gemini-2.0-flash-001 — fast analysis and structured output
-• perplexity/sonar-pro — web-grounded research
-• openai/gpt-4o — general purpose`,
-  {
-    model: z.string().optional().describe('OpenRouter model ID (e.g., "moonshotai/kimi-k2.5"). Omit to use the configured default.'),
-    prompt: z.string().describe('The full prompt to send, including all necessary context'),
-    system: z.string().optional().describe('Optional system prompt to set the model\'s role or constraints'),
-    max_tokens: z.number().int().positive().optional().describe('Maximum tokens to generate. Omit to use the model default.'),
-  },
-  async (args) => {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return {
-        content: [{ type: 'text' as const, text: 'OPENROUTER_API_KEY is not configured. Add it to .env.' }],
-        isError: true,
-      };
-    }
-
-    const model = args.model || process.env.OPENROUTER_DEFAULT_MODEL;
-    if (!model) {
-      return {
-        content: [{ type: 'text' as const, text: 'No model specified and OPENROUTER_DEFAULT_MODEL is not configured. Pass a model ID or set the default in .env.' }],
-        isError: true,
-      };
-    }
-
-    const messages: Array<{ role: string; content: string }> = [];
-    if (args.system) {
-      messages.push({ role: 'system', content: args.system });
-    }
-    messages.push({ role: 'user', content: args.prompt });
-
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'nanoclaw',
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          ...(args.max_tokens != null ? { max_tokens: args.max_tokens } : {}),
-        }),
-      });
-
-      const data = await response.json() as {
-        choices?: Array<{ message?: { content?: string } }>;
-        error?: { message?: string };
-      };
-
-      if (!response.ok || data.error) {
-        const msg = data.error?.message ?? `HTTP ${response.status}`;
-        return {
-          content: [{ type: 'text' as const, text: `OpenRouter error: ${msg}` }],
-          isError: true,
-        };
-      }
-
-      const text = data.choices?.[0]?.message?.content ?? '';
-      return { content: [{ type: 'text' as const, text }] };
-    } catch (err) {
-      return {
-        content: [{ type: 'text' as const, text: `Request failed: ${err instanceof Error ? err.message : String(err)}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  'call_lm_studio',
-  `Call a locally-hosted model via LM Studio (running on the local network). Free — no API cost. Use for tasks where a local model is sufficient: drafting, summarising, classification, translation, code explanation.
-
-Omit the model parameter to use whichever model is currently active in LM Studio.
-
-Available models:
-• google/gemma-3-4b — fast, good for quick tasks
-• liquid/lfm2-24b-a2b — capable 24B MoE, good general purpose
-• openai/gpt-oss-20b — OpenAI open-source 20B
-• mistralai/devstral-small-2-2512 — code-focused
-• nvidia-nemotron-3-nano-30b-a3b-mlx — 30B MoE, MLX-optimised
-• minicpm-o-4_5 — multimodal (text + image)
-• nanbeige4.1-3b — small, very fast
-
-The model runs independently with no memory of your conversation. Pass all necessary context in the prompt.`,
-  {
-    model: z.string().optional().describe('LM Studio model ID (e.g. "liquid/lfm2-24b-a2b"). Omit to use the currently active model.'),
-    prompt: z.string().describe('The full prompt to send, including all necessary context'),
-    system: z.string().optional().describe('Optional system prompt'),
-    max_tokens: z.number().int().positive().optional().describe('Maximum tokens to generate'),
-  },
-  async (args) => {
-    const baseUrl = process.env.LM_STUDIO_BASE_URL;
-    if (!baseUrl) {
-      return {
-        content: [{ type: 'text' as const, text: 'LM_STUDIO_BASE_URL is not configured. Add it to .env.' }],
-        isError: true,
-      };
-    }
-
-    const messages: Array<{ role: string; content: string }> = [];
-    if (args.system) messages.push({ role: 'system', content: args.system });
-    messages.push({ role: 'user', content: args.prompt });
-
-    try {
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...(args.model ? { model: args.model } : {}),
-          messages,
-          ...(args.max_tokens != null ? { max_tokens: args.max_tokens } : {}),
-        }),
-      });
-
-      const data = await response.json() as {
-        choices?: Array<{ message?: { content?: string } }>;
-        error?: { message?: string };
-      };
-
-      if (!response.ok || data.error) {
-        const msg = data.error?.message ?? `HTTP ${response.status}`;
-        return {
-          content: [{ type: 'text' as const, text: `LM Studio error: ${msg}` }],
-          isError: true,
-        };
-      }
-
-      const text = data.choices?.[0]?.message?.content ?? '';
-      return { content: [{ type: 'text' as const, text }] };
-    } catch (err) {
-      return {
-        content: [{ type: 'text' as const, text: `Request failed: ${err instanceof Error ? err.message : String(err)}` }],
-        isError: true,
-      };
-    }
-  },
-);
+// BizClaw tools: call_model (OpenRouter) + call_lm_studio (local LM Studio)
+registerBizclawTools(server);
 
 // Start the stdio transport
 const transport = new StdioServerTransport();

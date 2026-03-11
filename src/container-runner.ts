@@ -22,6 +22,7 @@ import { logger } from './logger.js';
 import { CONTAINER_RUNTIME_BIN, readonlyMountArgs, stopContainer } from './container-runtime.js';
 import { validateAdditionalMounts } from './mount-security.js';
 import { RegisteredGroup, ContentBlock } from './types.js';
+import { BIZCLAW_SECRET_KEYS } from './bizclaw-config.js';
 
 // Sentinel markers for robust output parsing (must match agent-runner)
 const OUTPUT_START_MARKER = '---NANOCLAW_OUTPUT_START---';
@@ -197,7 +198,7 @@ function buildVolumeMounts(
  * Secrets are never written to disk or mounted as files.
  */
 function readSecrets(): Record<string, string> {
-  return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTER_DEFAULT_MODEL', 'TAVILY_API_KEY', 'TMDB_API_KEY', 'LM_STUDIO_BASE_URL']);
+  return readEnvFile(['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', ...BIZCLAW_SECRET_KEYS]);
 }
 
 function buildContainerArgs(mounts: VolumeMount[], containerName: string): string[] {

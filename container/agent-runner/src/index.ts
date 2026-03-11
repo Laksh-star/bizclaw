@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { query, HookCallback, PreCompactHookInput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
+import { getBizclawNanoclawMcpEnv, getBizclawMcpServers, createTavilyMovieBlockHook } from './bizclaw-tools.js';
 
 interface ContainerInput {
   prompt: string | object[];
@@ -197,38 +198,6 @@ function createPreCompactHook(assistantName?: string): HookCallback {
 // These are needed by claude-code for API auth but should never
 // be visible to commands Kit runs.
 const SECRET_ENV_VARS = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'];
-
-const MOVIE_KEYWORDS = [
-  'movie', 'film', 'cinema', 'theater', 'theatre', 'playing', 'now playing',
-  'streaming', 'netflix', 'amazon prime', 'hotstar', 'disney+', 'prime video',
-  'box office', 'release date', 'actor', 'actress', 'director', 'cast',
-  'imdb', 'tmdb', 'tv show', 'tv series', 'web series', 'episode', 'season',
-  'anime', 'bollywood', 'hollywood', 'tollywood', 'kollywood', 'watchlist',
-  'watch tonight', 'what to watch', 'recommend.*movie', 'recommend.*film',
-  'trending movie', 'trending film', 'new movie', 'latest movie',
-];
-
-function createTavilyMovieBlockHook(): HookCallback {
-  return async (input, _toolUseId, _context) => {
-    const preInput = input as PreToolUseHookInput;
-    const queryArg = (preInput.tool_input as { query?: string })?.query?.toLowerCase() || '';
-    const isMovieQuery = MOVIE_KEYWORDS.some(kw => queryArg.includes(kw) || new RegExp(kw).test(queryArg));
-    if (isMovieQuery) {
-      return {
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          permissionDecision: 'deny',
-          permissionDecisionReason:
-            'Movie/TV queries must use TMDB MCP tools, not Tavily. ' +
-            'Available tools: mcp__tmdb__get_now_playing (theaters), mcp__tmdb__search_movies, ' +
-            'mcp__tmdb__get_trending, mcp__tmdb__get_movie_details, mcp__tmdb__get_watch_providers, ' +
-            'mcp__tmdb__search_tv_shows, mcp__tmdb__get_trending_tv. Use these instead.',
-        },
-      };
-    }
-    return {};
-  };
-}
 
 function createSanitizeBashHook(): HookCallback {
   return async (input, _toolUseId, _context) => {
@@ -489,31 +458,14 @@ async function runQuery(
             NANOCLAW_CHAT_JID: containerInput.chatJid,
             NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
-            ...(sdkEnv.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: sdkEnv.OPENROUTER_API_KEY as string } : {}),
-            ...(sdkEnv.OPENROUTER_DEFAULT_MODEL ? { OPENROUTER_DEFAULT_MODEL: sdkEnv.OPENROUTER_DEFAULT_MODEL as string } : {}),
-            ...(sdkEnv.LM_STUDIO_BASE_URL ? { LM_STUDIO_BASE_URL: sdkEnv.LM_STUDIO_BASE_URL as string } : {}),
+            ...getBizclawNanoclawMcpEnv(sdkEnv),
           },
         },
         gmail: {
           command: 'gmail-mcp',
           args: [],
         },
-        tavily: {
-          command: 'tavily-mcp',
-          args: [],
-          env: {
-            TAVILY_API_KEY: sdkEnv.TAVILY_API_KEY as string || '',
-          },
-        },
-        tmdb: {
-          command: 'node',
-          args: ['/opt/mcp-server-tmdb/dist/index.js'],
-          env: {
-            TMDB_API_KEY: sdkEnv.TMDB_API_KEY as string || '',
-            // Proxy TMDB calls through the host (macOS) to avoid Apple Container CloudFront routing issues.
-            TMDB_BASE_URL: 'http://192.168.64.1:7878/tmdb',
-          },
-        },
+        ...getBizclawMcpServers(sdkEnv),
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook(containerInput.assistantName)] }],
