@@ -4,6 +4,49 @@ Track of features, skills, and architectural decisions specific to BizClaw (fork
 
 ---
 
+## v0.8 — Mar 11, 2026
+
+### Upstream Sync Infrastructure
+
+- **`scripts/upstream-sync.sh`** — New script to safely manage upstream cherry-picks. Commands: `check` (fetch + list new commits, flag conflict-risk files), `categorize` (sort into ALWAYS PULL / EVALUATE / SAFE / NEW FILES), `pick <hash>` (guarded cherry-pick with logging), `skills` (pull `.claude/skills/`), `log`, `mark-synced`.
+- **`nanoclaw` git remote** added: `https://github.com/qwibitai/nanoclaw.git`
+- **Baseline set** at `7e9a698` (nanoclaw/main as of 2026-03-11). 85 upstream commits catalogued.
+- **17 community skills pulled**: add-compact, add-image-vision, add-ollama-tool, add-pdf-reader, add-reactions, add-slack, add-whatsapp, update-nanoclaw, update-skills, use-local-whisper + updates to 7 existing skills.
+
+### Architectural Isolation (conflict reduction)
+
+Pure refactoring — no behavior changes. BizClaw additions now in dedicated files so upstream cherry-picks cause fewer merge conflicts.
+
+- **`container/agent-runner/src/bizclaw-tools.ts`** — `call_model` (OpenRouter), `call_lm_studio` (LM Studio), `getBizclawNanoclawMcpEnv`, `getBizclawMcpServers`, `createTavilyMovieBlockHook`, `MOVIE_KEYWORDS`. Removes all BizClaw tool code from `ipc-mcp-stdio.ts` and `index.ts`.
+- **`src/bizclaw-config.ts`** — `BIZCLAW_SECRET_KEYS` constant (`OPENROUTER_API_KEY`, `OPENROUTER_DEFAULT_MODEL`, `TAVILY_API_KEY`, `TMDB_API_KEY`, `LM_STUDIO_BASE_URL`). Used by `readSecrets()` in `container-runner.ts`.
+- **`src/channels/telegram-streaming.ts`** — `generateDraftId()`, `sendTelegramDraft()`. Removes streaming implementation from `telegram.ts`.
+- Each upstream file now has exactly **1 new import line** from a `bizclaw-*` module.
+
+### Standalone Skills Repo
+
+- **`bizclaw-skills/`** — NanoClaw-compatible skills packaging BizClaw capabilities for upstream users.
+  - `add-openrouter/SKILL.md` — `call_model` MCP tool via OpenRouter
+  - `add-tavily-search/SKILL.md` — Tavily MCP server for cited structured search
+  - `add-telegram-streaming/SKILL.md` — `sendMessageDraft` streaming in Telegram DMs
+  - `add-lm-studio/SKILL.md` — `call_lm_studio` for local LM Studio inference
+  - `README.md` — install instructions
+- All paths verified against `nanoclaw/main` current file structure.
+
+### Files Changed
+- `scripts/upstream-sync.sh` — new (executable)
+- `scripts/.last-upstream-sync` — baseline hash
+- `container/agent-runner/src/bizclaw-tools.ts` — new
+- `container/agent-runner/src/ipc-mcp-stdio.ts` — 1 import, removed 150 lines of tool code
+- `container/agent-runner/src/index.ts` — 1 import, removed MOVIE_KEYWORDS + hook + inline MCP configs
+- `src/bizclaw-config.ts` — new
+- `src/container-runner.ts` — 1 import, `readSecrets` uses `BIZCLAW_SECRET_KEYS`
+- `src/channels/telegram-streaming.ts` — new
+- `src/channels/telegram.ts` — 1 import, `streamPartial` reduced to 3 lines
+- `bizclaw-skills/` — 5 new files (4 skills + README)
+- `.claude/skills/` — 17 files updated/added from upstream
+
+---
+
 ## v0.7 — Mar 3, 2026
 
 ### LM Studio Integration (local network model calling)
@@ -174,11 +217,14 @@ Track of features, skills, and architectural decisions specific to BizClaw (fork
 
 | Category | Files | Notes |
 |----------|-------|-------|
-| Multi-model | `container/agent-runner/src/ipc-mcp-stdio.ts` | `call_model` tool |
-| Multi-model | `container/agent-runner/src/index.ts` | Tavily MCP, OpenRouter envs |
+| Isolation | `container/agent-runner/src/bizclaw-tools.ts` | All BizClaw MCP tools + hook + MCP server helpers |
+| Isolation | `src/bizclaw-config.ts` | BizClaw secret key names |
+| Isolation | `src/channels/telegram-streaming.ts` | `sendMessageDraft` implementation |
+| Multi-model | `container/agent-runner/src/ipc-mcp-stdio.ts` | 1-line import from bizclaw-tools |
+| Multi-model | `container/agent-runner/src/index.ts` | 1-line import from bizclaw-tools |
 | Multi-model | `container/Dockerfile` | `tavily-mcp` global install |
-| Multi-model | `src/container-runner.ts` | OPENROUTER_*, TAVILY_API_KEY secrets |
-| Telegram | `src/channels/telegram.ts` | Voice transcription, `sendMessageDraft` streaming |
+| Multi-model | `src/container-runner.ts` | 1-line import from bizclaw-config |
+| Telegram | `src/channels/telegram.ts` | 1-line import from telegram-streaming |
 | Scheduler | `src/task-scheduler.ts` | `runningTaskIds`, 60s idle timeout |
 | Config | `src/config.ts` | INSTANCE_NAME, scoped paths |
 | Build | `container/build.sh` | INSTANCE_NAME-based image name |
