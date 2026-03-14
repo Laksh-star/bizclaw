@@ -4,6 +4,59 @@ Track of features, skills, and architectural decisions specific to BizClaw (fork
 
 ---
 
+## v0.9 — Mar 14, 2026
+
+### Movisvami Content Calendar Automation
+
+Full 3-agent social media publishing pipeline for the movisvami brand (management/leadership quotes from movies/TV). Brand-specific files are gitignored; generic skill and doc are in the repo.
+
+#### Architecture
+
+Three independent agents, each a container run with a different prompt scope:
+
+1. **Calendar Agent** — queries TMDB (movies + TV shows) by theme/keyword/genre/trending, maps results to leadership angles via `call_model`, generates a 7-entry weekly calendar, sends Telegram approval summary, handles approval conversation (approve / skip / swap / more options)
+2. **Production Agent** — for each approved entry: generates platform captions (`call_model`, 4 parallel outputs), generates 900–1200 word WordPress article (`call_model`), renders branded 1080×1080 PNG via Puppeteer HTML template. Saves to production files — no publishing yet. Presents publishing options after completion.
+3. **Publishing Agent** (optional) — triggered manually ("publish day N") or via scheduled task. Uploads image to WordPress.com (gets public URL for IG/FB), publishes to all 5 platforms, writes log, confirms with links.
+
+#### Files Added (movisvami-specific, gitignored)
+
+- **`container/agent-runner/src/movisvami-tools.ts`** — 6 MCP tools registered into the nanoclaw server:
+  - `movisvami_upload_image` — uploads PNG to WordPress.com media, returns public URL
+  - `movisvami_publish_wordpress` — Basic auth, REST API, article + featured image
+  - `movisvami_publish_instagram` — Meta Graph API, 2-step: create container → publish
+  - `movisvami_publish_facebook` — Meta Graph API, `POST /{page-id}/photos`
+  - `movisvami_publish_twitter` — OAuth 1.0a (HMAC-SHA1 implemented inline), media upload + tweet
+  - `movisvami_publish_linkedin` — register upload → binary PUT → ugcPost
+  - `getMovisvamiNanoclawMcpEnv()` — credential forwarding helper
+- **`src/movisvami-config.ts`** — 15 credential key names constant
+- **`groups/movisvami/CLAUDE.md`** — full 3-agent workflow: TMDB steps, `call_model` prompt templates, Puppeteer injection steps, file schemas, approval state machine, publishing tool reference
+- **`groups/movisvami/templates/quote-card.html`** — Puppeteer template: cinematic dark background, gold accent, italic quote text with auto-scaling font, character/movie attribution, movisvami branding
+
+#### Files Modified (3 lines total, in repo)
+
+- **`src/bizclaw-config.ts`** — 15 `MOVISVAMI_*` keys added to `BIZCLAW_SECRET_KEYS`
+- **`container/agent-runner/src/ipc-mcp-stdio.ts`** — 1 import + `registerMovisvamiTools(server)` call
+- **`container/agent-runner/src/index.ts`** — 1 import + `...getMovisvamiNanoclawMcpEnv(sdkEnv)` spread
+
+#### Generic Files Added (in repo)
+
+- **`bizclaw-skills/add-content-calendar/SKILL.md`** — reusable skill to set up this pattern for any brand. Covers: requirements gathering, tools file template (with OAuth 1.0a), wiring pattern, gitignore strategy, credential guides per platform, build + verify steps, troubleshooting
+- **`docs/content-calendar-automation.md`** — architecture reference doc with schemas and agent design rationale
+
+#### Key Design Decisions
+
+- **Publishing is optional/decoupled** — Production Agent saves files and stops; Publishing Agent is a separate trigger (manual or scheduled). Gives a manual escape hatch without code changes.
+- **Image hosted on WordPress.com first** — Instagram/Facebook require public URL; WordPress.com media endpoint serves as image CDN. Twitter and LinkedIn accept binary upload directly.
+- **OAuth 1.0a for Twitter** — HMAC-SHA1 signing implemented in `movisvami-tools.ts` using Node.js `crypto`. No external OAuth library needed.
+- **gitignore pattern** — `groups/*` already covers `groups/movisvami/`. Added explicit ignores for `src/movisvami-config.ts` and `container/agent-runner/src/movisvami-tools.ts`. Generic docs in `docs/` are not gitignored.
+- **BizClaw isolation maintained** — zero structural changes to upstream files. Follows v0.8 pattern exactly.
+
+#### Status
+
+Container rebuilt and service restarted. Awaiting platform API credentials before end-to-end test. Start with WordPress.com (Application Password — simplest auth).
+
+---
+
 ## v0.8 — Mar 11, 2026
 
 ### Upstream Sync Infrastructure

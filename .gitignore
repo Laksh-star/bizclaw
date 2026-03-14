@@ -32,6 +32,13 @@ groups/telegram/*
 .idea/
 .vscode/
 
+# Brand-specific local plans (keep generic versions in docs/ instead)
+docs/movisvami-*.md
+
+# Movisvami brand-specific source files (local only)
+src/movisvami-config.ts
+container/agent-runner/src/movisvami-tools.ts
+
 # Skills system (local per-installation state)
 .nanoclaw/
 

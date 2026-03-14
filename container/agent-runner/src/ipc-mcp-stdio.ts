@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { CronExpressionParser } from 'cron-parser';
 import { registerBizclawTools } from './bizclaw-tools.js';
+import { registerMovisvamiTools } from './movisvami-tools.js';
 
 const IPC_DIR = '/workspace/ipc';
 const MESSAGES_DIR = path.join(IPC_DIR, 'messages');
@@ -279,6 +280,8 @@ Use available_groups.json to find the JID for a group. The folder name should be
 
 // BizClaw tools: call_model (OpenRouter) + call_lm_studio (local LM Studio)
 registerBizclawTools(server);
+// Movisvami tools: social platform publishers + image upload
+registerMovisvamiTools(server);
 
 // Start the stdio transport
 const transport = new StdioServerTransport();

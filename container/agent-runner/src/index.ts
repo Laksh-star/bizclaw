@@ -19,6 +19,7 @@ import path from 'path';
 import { query, HookCallback, PreCompactHookInput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
 import { getBizclawNanoclawMcpEnv, getBizclawMcpServers, createTavilyMovieBlockHook } from './bizclaw-tools.js';
+import { getMovisvamiNanoclawMcpEnv } from './movisvami-tools.js';
 
 interface ContainerInput {
   prompt: string | object[];
@@ -459,6 +460,7 @@ async function runQuery(
             NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
             ...getBizclawNanoclawMcpEnv(sdkEnv),
+            ...getMovisvamiNanoclawMcpEnv(sdkEnv),
           },
         },
         gmail: {
